@@ -1,0 +1,111 @@
+---
+title: "Assignment2_RMD"
+output: html_document
+---
+
+Assignment2 is to redo the analysis of Assignment1 using R exclusively
+1. Read in bed files
+2. Find overlapping genes
+3. Generate TSS and add 5kbp around each TSS
+4. Find overlapping marks and TSS
+5. Find overlapping marks
+6. Generate pie charts
+
+```{r}
+##Loading Libraries
+library(GenomicRanges)
+library(rtracklayer)
+library(RColorBrewer)
+library(compare)
+library(GenomicFeatures)
+library(TxDb.Mmusculus.UCSC.mm9.knownGene)
+library(IRanges)
+```
+
+```{r}
+##Load bed files
+k27ac <- import.bedGraph(con="K27Ac_D7_Th1-W200-G200-E200-island.bedgraph", asRangedData=FALSE)
+k4m3 <- import.bedGraph(con="K4m3_Th1_72h-W200-G200-E200-island.bedgraph", asRangedData=FALSE)
+refgene <- import.bed(con="mm9_RefSeq.bed", asRangedData=FALSE)
+sort1 <- import.bed("1sort.bed")
+sort2 <- import.bed("2sort.bed")
+```
+
+```{r}
+#Subsetting the overlapping genes and counting unique genes
+k27ac.gene.overlaps <- subsetByOverlaps(refgene, k27ac)
+list1 <- sort(unique(k27ac.gene.overlaps$name))
+length(intersect(list1,sort1$name))/length(list1)
+
+k4m3.gene.overlaps <- subsetByOverlaps(refgene, k4m3)
+list2 <- sort(unique(k4m3.gene.overlaps$name))
+length(intersect(list2,sort2$name))/length(list2)
+```
+
+```{r}
+##Creating tss start sites and finding histone mark overlaps
+tss <- flank(refgene, width = 5000, both=TRUE, start=TRUE)
+k27ac.tss.overlaps <- subsetByOverlaps(tss, k27ac)
+k27ac.tss <- subsetByOverlaps(k27ac, tss)
+list3 <- sort(unique(k27ac.tss.overlaps$name))
+k4m3.tss.overlaps <- subsetByOverlaps(tss, k4m3)
+k4m3.tss <- subsetByOverlaps(k4m3, tss)
+list4 <- sort(unique(k4m3.tss.overlaps$name))
+```
+
+```{r}
+##Finding overlaps between histone marks
+k27ac.overlaps <- subsetByOverlaps(k4m3, k27ac)
+k4m3.overlaps <- subsetByOverlaps(k27ac, k4m3)
+```
+
+```{r}
+##Calculating percentages
+sum(width(reduce(k27ac.tss, ignore.strand=TRUE)))/sum(width(k27ac))
+sum(width(reduce(k4m3.tss, ignore.strand=TRUE)))/sum(width(k4m3))
+sum(width(reduce(k27ac.overlaps, ignore.strand=TRUE)))/sum(width(k4m3))
+sum(width(reduce(k4m3.overlaps, ignore.strand=TRUE)))/sum(width(k27ac))
+```
+
+Pie Charts:
+
+```{r echo=FALSE}
+#Function to put graphs in 2x2 Grid
+mypar2 <- function(a=1,b=1,brewer.n=8,brewer.name="Dark2",cex.lab=1,cex.main=1.2,cex.axis=1,mar=c(2.5,2.5,1.6,1.1),mgp=c(1.5,.5,0),...){
+  require(RColorBrewer)
+  par(mar=mar,mgp=mgp,cex.lab=cex.lab,cex.main=cex.main,cex.axis=cex.axis)
+  par(mfrow=c(a,b),...)
+  palette(brewer.pal(brewer.n,brewer.name))
+}
+```
+
+```{r echo=FALSE}
+##Creating Graphs
+mypar2(2,2)
+slices <- c(sum(width(reduce(k27ac.tss, ignore.strand=TRUE))), sum(width(k27ac))) ##Pie chart 1
+lbls <- c("TSS", "Total")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels 
+lbls <- paste(lbls,"%",sep="") # ad % to labels 
+pie(slices, labels = lbls, main="A H3K4me3 Marks within 5kbp of TSS")
+slices <- c(sum(width(reduce(k4m3.tss, ignore.strand=TRUE))), sum(width(k4m3))) ##Pie chart 2
+lbls <- c("TSS", "Total")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels 
+lbls <- paste(lbls,"%",sep="") # ad % to labels 
+pie(slices, labels = lbls, main="B H3K27ac Marks within 5kbp of TSS")
+slices <- c(sum(width(reduce(k27ac.overlaps, ignore.strand=TRUE))), sum(width(k4m3))) ##Pie chart 3
+lbls <- c("Overlap", "Total")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels 
+lbls <- paste(lbls,"%",sep="") # ad % to labels 
+pie(slices, labels = lbls, main="C H3K4me3 Overlapping H3K27ac")
+slices <- c(sum(width(reduce(k4m3.overlaps, ignore.strand=TRUE))), sum(width(k27ac))) ##Pie chart 4
+lbls <- c("Overlap", "Total")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels 
+lbls <- paste(lbls,"%",sep="") # ad % to labels 
+pie(slices, labels = lbls, main="D H3K27ac Overlapping H3K4me3")
+```
+
+Figure 1. A shows the percentage of H3K4Me3 marks within 5 kbp on either side of the transcription start sites of every gene over the entire H3K4Me3 coverage of the genome. B shows the percentage of H3K27ac marks within 5 kbp on either side of the transcription start sites of every gene over the entire H3K27ac coverage of the genome. C shows the percentage of H3K4me3 coverage that overlaps the coverage of H3K27ac and D shows the percentage of H3K27ac coverage over the entire coverage of H3K4me3.
